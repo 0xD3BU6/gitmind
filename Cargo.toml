@@ -8,7 +8,9 @@ crossterm = "0.29.0"
 dirs = "7"
 git2 = { version = "0.21.0", features = ["https", "ssh"] }
 ratatui = "0.30.2"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "blocking", "form"] }
 rig-core = "0.42"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 toml = "1"
