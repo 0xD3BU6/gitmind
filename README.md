@@ -10,9 +10,16 @@ cargo run --release              # splash → path prompt
 cargo run --release -- ~/repo    # open a repo directly
 ```
 
+## Demo
+
+| Splash | Dashboard |
+|--------|-----------|
+| ![Splash screen](assets/splash-screen.png) | ![Main screen](assets/main-screen.png) |
+
 ## Bring your own keys
 
-Press `,` anywhere to open settings. Values are saved to
+Press `,` on any screen (or `Ctrl-S` on the path prompt) to open settings.
+The key is also shown in every footer and on the splash screen. Values are saved to
 `~/.config/gitmind/config.toml` with mode 600 and never leave your machine
 except in requests to the provider you configured.
 

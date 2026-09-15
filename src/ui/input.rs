@@ -47,6 +47,8 @@ pub fn draw(f: &mut Frame, app: &App) {
             Span::styled(" open   ", theme::dim()),
             Span::styled("Ctrl-U", theme::key()),
             Span::styled(" clear   ", theme::dim()),
+            Span::styled("Ctrl-S", theme::key()),
+            Span::styled(" settings   ", theme::dim()),
             Span::styled("Esc", theme::key()),
             Span::styled(" back   ", theme::dim()),
             Span::styled("Ctrl-C", theme::key()),

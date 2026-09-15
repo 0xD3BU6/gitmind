@@ -175,6 +175,8 @@ pub fn draw(f: &mut Frame, app: &App) {
         Span::styled(if blink { "▶ " } else { "  " }, Style::default().fg(theme::ACCENT)),
         Span::styled("press any key", theme::key()),
         Span::styled(" to open a repository   ", theme::dim()),
+        Span::styled(",", theme::key()),
+        Span::styled(" settings   ", theme::dim()),
         Span::styled("?", theme::key()),
         Span::styled(" help   ", theme::dim()),
         Span::styled("q", theme::key()),
