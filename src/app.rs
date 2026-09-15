@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::git;
 use crate::models::{BranchInfo, CommitInfo, FileChange, RepositoryInfo};
 use crate::tui::events::handle_event;
-use crate::tui::state::{State, Tab};
+use crate::tui::state::{PromptKind, State, Tab};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -23,6 +23,7 @@ pub struct Session {
     pub selected: [usize; 3],
     pub diff: String,
     pub diff_scroll: u16,
+    pub stashes: usize,
     /// Paths marked for a bulk stage/unstage (Status tab).
     pub marked: HashSet<String>,
 }
@@ -85,6 +86,10 @@ pub enum JobKind {
     CommitMessage,
     /// Pushing to origin.
     Push,
+    /// Fetching from origin.
+    Fetch,
+    /// Fetch + fast-forward.
+    Pull,
 }
 
 /// A running background job (network work never blocks the UI thread).
@@ -174,6 +179,10 @@ pub struct App {
     pub prev_state: State,
     pub job: Option<Job>,
     pub login: Option<LoginFlow>,
+    /// Active text prompt, if any.
+    pub prompt: Option<(PromptKind, String)>,
+    /// Path that failed to open as a repo (offer `git init`).
+    pub init_candidate: Option<PathBuf>,
 }
 
 impl App {
@@ -240,6 +249,29 @@ impl App {
                 self.refresh();
                 self.notify(format!("Opened {}", root.display()));
             }
+            Err(e) => {
+                let is_dir = path.is_dir();
+                self.init_candidate = is_dir.then(|| path.to_path_buf());
+                if is_dir {
+                    self.error(format!("{e} — Ctrl-I to run git init here"));
+                } else {
+                    self.error(e.to_string());
+                }
+            }
+        }
+    }
+
+    /// `git init` the last path that failed to open, then open it.
+    pub fn init_here(&mut self) {
+        let Some(path) = self.init_candidate.take() else {
+            self.error("Enter a directory path first");
+            return;
+        };
+        match git::init_repo(&path) {
+            Ok(_) => {
+                self.open(&path);
+                self.notify(format!("Initialised repository at {}", path.display()));
+            }
             Err(e) => self.error(e.to_string()),
         }
     }
@@ -255,6 +287,8 @@ impl App {
             s.changes = git::changes(&repo)?;
             s.commits = git::recent_commits(&repo, LOG_LIMIT)?;
             s.branches = git::list_branches(&repo)?;
+            let mut repo = repo;
+            s.stashes = git::stash_count(&mut repo);
             Ok(())
         })();
         let present: HashSet<String> = s.changes.iter().map(|c| c.path.clone()).collect();
@@ -502,6 +536,22 @@ impl App {
     // ------------------------------------------------------------- push --
 
     pub fn push(&mut self) {
+        self.network(JobKind::Push, |repo, token| git::push(repo, Some(token)));
+    }
+
+    pub fn fetch(&mut self) {
+        self.network(JobKind::Fetch, |repo, token| git::fetch(repo, Some(token)));
+    }
+
+    pub fn pull(&mut self) {
+        self.network(JobKind::Pull, |repo, token| git::pull(repo, Some(token)));
+    }
+
+    /// Run a git network operation on a background thread.
+    fn network<F>(&mut self, kind: JobKind, op: F)
+    where
+        F: FnOnce(&git2::Repository, &str) -> Result<String> + Send + 'static,
+    {
         if self.busy() {
             self.error("Still working on the previous request");
             return;
@@ -512,12 +562,12 @@ impl App {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = git::open_repo(&path)
-                .and_then(|repo| git::push(&repo, Some(&token)))
+                .and_then(|repo| op(&repo, &token))
                 .map_err(|e| e.to_string());
             let _ = tx.send(result);
         });
         self.job = Some(Job {
-            kind: JobKind::Push,
+            kind,
             started: Instant::now(),
             rx,
         });
@@ -538,12 +588,78 @@ impl App {
                 self.commit_msg = msg;
                 self.notify(format!("Proposal from {}", self.settings.model));
             }
-            (JobKind::Push, Ok(msg)) => {
+            (JobKind::Push | JobKind::Fetch | JobKind::Pull, Ok(msg)) => {
                 self.notify(msg);
                 self.refresh();
             }
             (_, Err(e)) => self.error(e),
         }
+    }
+
+    // ----------------------------------------------------------- prompts --
+
+    pub fn open_prompt(&mut self, kind: PromptKind) {
+        if self.session.is_none() {
+            return;
+        }
+        let prefill = match kind {
+            PromptKind::SetOrigin => self
+                .session
+                .as_ref()
+                .and_then(|s| s.info.remote.clone())
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
+        self.prompt = Some((kind, prefill));
+        self.prev_state = self.state;
+        self.state = State::Prompt;
+    }
+
+    pub fn cancel_prompt(&mut self) {
+        self.prompt = None;
+        self.state = State::Dashboard;
+    }
+
+    /// Enter pressed in a prompt: run the matching action.
+    pub fn submit_prompt(&mut self) {
+        let Some((kind, value)) = self.prompt.take() else { return };
+        self.state = State::Dashboard;
+        let Some(s) = &self.session else { return };
+        let path = s.path.clone();
+        let value = value.trim().to_string();
+        let result = match kind {
+            PromptKind::NewBranch => git::open_repo(&path)
+                .and_then(|r| git::create_branch(&r, &value))
+                .map(|_| format!("Created and switched to {value}")),
+            PromptKind::SetOrigin => git::open_repo(&path).and_then(|r| git::set_origin(&r, &value)),
+            PromptKind::StashMessage => git::open_repo(&path).and_then(|mut r| git::stash_push(&mut r, &value)),
+            PromptKind::DeleteBranch => {
+                let target = s.selected_branch().map(|b| b.name.clone()).unwrap_or_default();
+                if value != target {
+                    Err(format!("type '{target}' to confirm deleting it").into())
+                } else {
+                    git::open_repo(&path)
+                        .and_then(|r| git::delete_branch(&r, &target))
+                        .map(|_| format!("Deleted branch {target}"))
+                }
+            }
+        };
+        self.finish(result);
+    }
+
+    pub fn delete_selected_branch(&mut self) {
+        let Some(s) = &self.session else { return };
+        match s.selected_branch() {
+            None => {}
+            Some(b) if b.is_head => self.error("Cannot delete the current branch"),
+            Some(_) => self.open_prompt(PromptKind::DeleteBranch),
+        }
+    }
+
+    pub fn stash_pop(&mut self) {
+        let Some(s) = &self.session else { return };
+        let result = git::open_repo(&s.path).and_then(|mut r| git::stash_pop(&mut r));
+        self.finish(result);
     }
 
     // ------------------------------------------------------------ login --

@@ -10,3 +10,9 @@ pub fn open_repo(path: &Path) -> Result<Repository> {
     Repository::discover(path)
         .map_err(|e| format!("Failed to open git repo at '{}': {e}", path.display()).into())
 }
+
+/// `git init` at `path` (created if missing).
+pub fn init_repo(path: &Path) -> Result<Repository> {
+    std::fs::create_dir_all(path)?;
+    Repository::init(path).map_err(|e| format!("init failed: {e}").into())
+}

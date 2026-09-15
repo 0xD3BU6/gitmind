@@ -30,7 +30,7 @@ impl Client {
             .completion_request(prompt)
             .preamble(preamble.to_string())
             .temperature(0.3)
-            .max_tokens(400)
+            .max_tokens(2000)
             .build();
         let response = model.completion(request).await?;
         let mut out = String::new();

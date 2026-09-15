@@ -13,6 +13,29 @@ pub enum State {
     Settings,
     /// GitHub device-flow login popup.
     Login,
+    /// A one-line text prompt (branch name, remote URL, stash message).
+    Prompt,
+}
+
+/// What a text prompt is asking for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptKind {
+    NewBranch,
+    SetOrigin,
+    StashMessage,
+    /// Confirm deleting a branch (type its name to confirm).
+    DeleteBranch,
+}
+
+impl PromptKind {
+    pub fn title(self) -> &'static str {
+        match self {
+            PromptKind::NewBranch => "New branch",
+            PromptKind::SetOrigin => "Set origin URL",
+            PromptKind::StashMessage => "Stash message",
+            PromptKind::DeleteBranch => "Delete branch",
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

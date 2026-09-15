@@ -50,3 +50,28 @@ pub fn checkout_branch(repo: &Repository, name: &str) -> Result<()> {
     repo.set_head(&refname)?;
     Ok(())
 }
+
+/// Create `name` at HEAD and switch to it.
+pub fn create_branch(repo: &Repository, name: &str) -> Result<()> {
+    let name = name.trim();
+    if name.is_empty() || name.contains(char::is_whitespace) || name.contains("..") {
+        return Err("invalid branch name".into());
+    }
+    let head = repo
+        .head()
+        .and_then(|h| h.peel_to_commit())
+        .map_err(|_| "no commits yet — commit first")?;
+    repo.branch(name, &head, false)
+        .map_err(|e| format!("cannot create branch: {e}"))?;
+    checkout_branch(repo, name)
+}
+
+/// Delete a local branch (never the checked-out one).
+pub fn delete_branch(repo: &Repository, name: &str) -> Result<()> {
+    let mut b = repo.find_branch(name, BranchType::Local)?;
+    if b.is_head() {
+        return Err("cannot delete the current branch".into());
+    }
+    b.delete().map_err(|e| format!("cannot delete branch: {e}"))?;
+    Ok(())
+}

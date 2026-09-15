@@ -22,16 +22,16 @@ pub fn draw(f: &mut Frame, area: Rect, app: &App) {
     let tab = app.session.as_ref().map(|s| s.tab).unwrap_or_default();
     let line = match (app.state, tab) {
         (State::Committing, _) => keys(&[("Enter", "commit"), ("^P", "commit+push"), ("^G", "AI"), ("Esc", "cancel")]),
+        (State::Prompt, _) => keys(&[("Enter", "ok"), ("Esc", "cancel")]),
         (_, Tab::Status) => keys(&[
             ("j/k", "move"),
             ("space", "mark"),
             ("s", "stage"),
             ("a/u", "all"),
             ("c", "commit"),
-            ("p", "push"),
-            ("J/K", "diff"),
-            ("r", "refresh"),
-            (",", "settings"),
+            ("p/f/P", "push/fetch/pull"),
+            ("z/Z", "stash/pop"),
+            ("R", "origin"),
             ("?", "help"),
             ("q", "quit"),
         ]),
@@ -47,8 +47,9 @@ pub fn draw(f: &mut Frame, area: Rect, app: &App) {
         (_, Tab::Branches) => keys(&[
             ("j/k", "move"),
             ("Enter", "checkout"),
-            ("p", "push"),
-            ("Tab", "next tab"),
+            ("n", "new"),
+            ("D", "delete"),
+            ("p/f/P", "push/fetch/pull"),
             (",", "settings"),
             ("?", "help"),
             ("q", "quit"),
@@ -61,6 +62,8 @@ pub fn draw(f: &mut Frame, area: Rect, app: &App) {
         let label = match job.kind {
             JobKind::CommitMessage => format!("{} {} thinking…", popup::spinner(app.frame), app.settings.model),
             JobKind::Push => format!("{} pushing to origin…", popup::spinner(app.frame)),
+            JobKind::Fetch => format!("{} fetching origin…", popup::spinner(app.frame)),
+            JobKind::Pull => format!("{} pulling…", popup::spinner(app.frame)),
         };
         let secs = job.started.elapsed().as_secs();
         let text = format!(" {label} {secs}s ");

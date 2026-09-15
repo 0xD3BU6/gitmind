@@ -17,12 +17,12 @@ use ratatui::{Frame, layout::Constraint};
 /// Render the whole screen for the current app state.
 pub fn draw(f: &mut Frame, app: &App) {
     // base screen
-    let base = if matches!(app.state, State::Settings | State::Login) { app.prev_state } else { app.state };
+    let base = if matches!(app.state, State::Settings | State::Login | State::Prompt) { app.prev_state } else { app.state };
     match base {
         State::Splash => splash::draw(f, app),
         State::Inputting => input::draw(f, app),
         State::Dashboard | State::Committing => draw_dashboard(f, app),
-        State::Settings | State::Login => draw_dashboard(f, app),
+        State::Settings | State::Login | State::Prompt => draw_dashboard(f, app),
     }
 
     // overlays
@@ -34,6 +34,9 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
     if app.state == State::Login {
         popup::login(f, app);
+    }
+    if app.state == State::Prompt {
+        popup::prompt(f, app);
     }
     if app.show_help {
         popup::help(f);

@@ -42,13 +42,16 @@ pub fn draw(f: &mut Frame, area: Rect, s: &Session, app: &App) {
         format!("● {staged} staged"),
         Style::default().fg(if staged > 0 { theme::GREEN } else { theme::DIM }),
     ));
+    if s.stashes > 0 {
+        branch_spans.push(Span::styled(format!("  ⧉ {} stashed", s.stashes), Style::default().fg(theme::PURPLE)));
+    }
     branch_spans.push(Span::styled("  ", theme::dim()));
     branch_spans.push(Span::styled(
         format!("○ {unstaged} unstaged"),
         Style::default().fg(if unstaged > 0 { theme::YELLOW } else { theme::DIM }),
     ));
 
-    let remote = info.remote.clone().unwrap_or_else(|| "no remote".to_string());
+    let remote = info.remote.clone().unwrap_or_else(|| "no remote (R to add origin)".to_string());
     let line2 = Line::from(vec![
         Span::styled(" ", theme::dim()),
         Span::styled(s.path.display().to_string(), Style::default().fg(theme::PRIMARY)),

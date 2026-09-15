@@ -47,6 +47,17 @@ token. HTTPS remotes use the token, falling back to git's credential helper.
 3. `Enter` commits, `^P` commits and pushes.
 4. `p` pushes the current branch to `origin` any time.
 
+### More git workflow
+
+| Key | Action |
+|-----|--------|
+| `R` | add `origin` or change its URL |
+| `f` / `P` | fetch origin / pull (fast-forward only; diverged branches are refused) |
+| `n` | new branch at HEAD, checked out |
+| `D` | delete the highlighted branch (Branches tab; type its name to confirm) |
+| `z` / `Z` | stash working tree (incl. untracked) / pop the latest stash |
+| `Ctrl-I` | on the path prompt: `git init` a plain folder and open it |
+
 `?` shows the full key map.
 
 [ratatui]: https://ratatui.rs

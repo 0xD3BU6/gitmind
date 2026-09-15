@@ -1,7 +1,7 @@
 use crate::app::{App, SettingsForm};
 use crate::config::TICK_RATE;
 use crate::error::Result;
-use crate::tui::state::{State, Tab};
+use crate::tui::state::{PromptKind, State, Tab};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::path::PathBuf;
 
@@ -59,6 +59,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             }
             KeyCode::Char('u') if ctrl(key) => app.input.clear(),
             KeyCode::Char('s') if ctrl(key) => app.open_settings(),
+            KeyCode::Char('i') if ctrl(key) => {
+                let raw = app.input.trim().to_string();
+                if !raw.is_empty() {
+                    app.init_candidate = Some(PathBuf::from(expand_tilde(&raw)));
+                }
+                app.init_here();
+            }
             KeyCode::Char(ch) => app.input.push(ch),
             _ => {}
         },
@@ -91,6 +98,26 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                 app.cancel_login();
             }
         }
+        State::Prompt => match key.code {
+            KeyCode::Enter => app.submit_prompt(),
+            KeyCode::Esc => app.cancel_prompt(),
+            KeyCode::Backspace => {
+                if let Some((_, v)) = app.prompt.as_mut() {
+                    v.pop();
+                }
+            }
+            KeyCode::Char('u') if ctrl(key) => {
+                if let Some((_, v)) = app.prompt.as_mut() {
+                    v.clear();
+                }
+            }
+            KeyCode::Char(ch) if !ctrl(key) => {
+                if let Some((_, v)) = app.prompt.as_mut() {
+                    v.push(ch);
+                }
+            }
+            _ => {}
+        },
     }
     false
 }
@@ -137,8 +164,15 @@ fn dashboard_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('u') if tab == Tab::Status => app.unstage_all(),
         KeyCode::Char('c') => app.begin_commit(),
         KeyCode::Char('p') => app.push(),
+        KeyCode::Char('f') => app.fetch(),
+        KeyCode::Char('P') => app.pull(),
+        KeyCode::Char('R') => app.open_prompt(PromptKind::SetOrigin),
+        KeyCode::Char('n') => app.open_prompt(PromptKind::NewBranch),
+        KeyCode::Char('z') => app.open_prompt(PromptKind::StashMessage),
+        KeyCode::Char('Z') => app.stash_pop(),
         KeyCode::Char('L') => app.begin_login(),
         KeyCode::Enter if tab == Tab::Branches => app.checkout_selected(),
+        KeyCode::Char('D') if tab == Tab::Branches => app.delete_selected_branch(),
         _ => {}
     }
     false

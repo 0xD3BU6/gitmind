@@ -1,5 +1,6 @@
 use crate::app::{App, JobKind, SettingsForm};
 use crate::config::mask;
+use crate::tui::state::PromptKind;
 use crate::ui::{layout, theme};
 use ratatui::{
     Frame,
@@ -17,8 +18,14 @@ pub fn spinner(frame: u64) -> &'static str {
 
 pub fn commit(f: &mut Frame, app: &App) {
     let area = f.area();
-    let msg_lines = app.commit_msg.lines().count().max(1) as u16;
-    let height = (msg_lines + 6).clamp(9, area.height.saturating_sub(2));
+    let inner_w = usize::from(area.width.min(76).saturating_sub(2)).max(1);
+    let msg_rows: u16 = app
+        .commit_msg
+        .lines()
+        .map(|l| (l.chars().count().max(1)).div_ceil(inner_w) as u16)
+        .sum::<u16>()
+        .max(1);
+    let height = (msg_rows + 6).clamp(9, area.height.saturating_sub(2));
     let rect = layout::centered(area, area.width.min(76), height);
     f.render_widget(Clear, rect);
 
@@ -61,10 +68,15 @@ pub fn commit(f: &mut Frame, app: &App) {
 
     let inner_h = rect.height.saturating_sub(2) as usize;
     let footer_rows = 2;
-    while body.len() + footer_rows < inner_h {
+    let avail = inner_h.saturating_sub(footer_rows);
+    // if the message is taller than the box, show its tail (where the cursor is)
+    if body.len() > avail {
+        let skip = body.len() - avail;
+        body.drain(..skip);
+    }
+    while body.len() < avail {
         body.push(Line::raw(""));
     }
-    body.truncate(inner_h.saturating_sub(footer_rows));
     body.push(Line::raw(""));
     body.push(Line::from(vec![
         Span::styled(format!("{staged} staged  "), Style::default().fg(theme::GREEN)),
@@ -106,6 +118,37 @@ pub fn commit(f: &mut Frame, app: &App) {
         let max_y = rect.height.saturating_sub(4);
         f.set_cursor_position(Position::new(rect.x + 1 + cx, rect.y + 1 + cy.min(max_y)));
     }
+}
+
+pub fn prompt(f: &mut Frame, app: &App) {
+    let Some((kind, value)) = &app.prompt else { return };
+    let area = f.area();
+    let rect = layout::centered(area, area.width.min(70), 6);
+    f.render_widget(Clear, rect);
+    let hint = match kind {
+        PromptKind::NewBranch => "created at HEAD and checked out".to_string(),
+        PromptKind::SetOrigin => "e.g. git@github.com:you/repo.git or https://github.com/you/repo.git".to_string(),
+        PromptKind::StashMessage => "working tree + untracked files are stashed (Z pops)".to_string(),
+        PromptKind::DeleteBranch => format!(
+            "type the branch name to confirm: {}",
+            app.session.as_ref().and_then(|s| s.selected_branch()).map(|b| b.name.as_str()).unwrap_or("")
+        ),
+    };
+    let lines = vec![
+        Line::styled(format!(" {value}"), Style::default().fg(theme::PRIMARY)),
+        Line::styled(format!(" {hint}"), theme::dim()),
+        Line::from(vec![
+            Span::styled(" Enter", theme::key()),
+            Span::styled(" ok  ", theme::dim()),
+            Span::styled("^U", theme::key()),
+            Span::styled(" clear  ", theme::dim()),
+            Span::styled("Esc", theme::key()),
+            Span::styled(" cancel", theme::dim()),
+        ]),
+    ];
+    f.render_widget(Paragraph::new(lines).block(theme::panel(kind.title(), true)), rect);
+    let x = rect.x + 2 + value.chars().count() as u16;
+    f.set_cursor_position(Position::new(x.min(rect.right().saturating_sub(2)), rect.y + 1));
 }
 
 pub fn login(f: &mut Frame, app: &App) {
@@ -250,12 +293,19 @@ pub fn help(f: &mut Frame) {
         ("s", "stage or unstage marked files (or the highlighted one)"),
         ("L", "login with GitHub (OAuth device flow)"),
         ("", ""),
+        ("Remote & sync", ""),
+        ("R", "add origin or change its URL"),
+        ("f / P", "fetch origin / pull (fast-forward only)"),
+        ("z / Z", "stash working tree / pop latest stash"),
+        ("Ctrl-I (path prompt)", "git init a plain folder"),
+        ("", ""),
         ("Commit popup", ""),
         ("Enter / ^P", "commit / commit then push"),
         ("^G", "(re)generate message with the model"),
         ("", ""),
         ("Branches tab", ""),
         ("Enter", "checkout highlighted branch (safe)"),
+        ("n / D", "new branch at HEAD / delete highlighted branch"),
     ];
 
     let lines: Vec<Line> = rows
