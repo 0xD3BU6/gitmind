@@ -28,18 +28,6 @@ except in requests to the provider you configured.
 | LLM API key   | from your LLM provider (e.g. console.groq.com/keys) | `LLM_API_KEY` |
 | Model         | model id at the provider (default `openai/gpt-oss-120b`) | –       |
 | GitHub token  | filled in by **Login with GitHub**, or paste a PAT (`repo` scope) | `GITHUB_TOKEN` |
-| OAuth client  | client id of your GitHub OAuth App (see below)   | `GITHUB_CLIENT_ID` |
-
-### Login with GitHub (OAuth device flow)
-
-1. Create an OAuth App once at https://github.com/settings/developers →
-   *New OAuth App*. Any name and URL; tick **Enable Device Flow**. No client
-   secret is needed.
-2. Put its *Client ID* in settings (`,` → OAuth client) and press `^L`, or
-   press `L` from the splash or dashboard.
-3. GitMind shows a one-time code and opens https://github.com/login/device.
-   Approve it there; the token is stored automatically and the header shows
-   your login name.
 
 SSH remotes (`git@github.com:...`) use your running SSH agent instead of the
 token. HTTPS remotes use the token, falling back to git's credential helper.
